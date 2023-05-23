@@ -1,5 +1,9 @@
 <?php
 
+use App\Models\Action;
+use App\Models\InternalCommand;
+use App\Models\InternalFunction;
+use App\Models\Verb;
 use App\Models\Demon;
 use App\Models\ObjectInstance;
 use App\Models\Motion;
@@ -16,6 +20,7 @@ use App\Models\Travel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Migrations\Migration;
+use const http\Client\Curl\VERSIONS;
 
 return new class extends Migration
 {
@@ -31,8 +36,25 @@ return new class extends Migration
     private const USE_OTHER_ROOM_SHORT_DESCRIPTION = self::REPEAT;
     private const RANGE = '-';
     private const NOT = '~';
+    private const DEMON_START = '$';
+    private const COMMAND_START = '.';
     private const DEATH_ATTRIBUTE = 'death';
     private const NEW_LINE_AFTER_SHORT_LINE_LENGTH = 60;
+    private const NO_CLASS = 'none';
+    private const NO_PARAMETER = 'null';
+    private const FUNCTION_ON_WITH_OBJECT = 'second';
+    private const FUNCTIONS_WITH_VALUES = [
+        'ifprop',
+        'ifweighs',
+        'hurt',
+        'retal',
+        'iflevel',
+        'unlessplaying',
+        'sendlevel',
+        'unlessrlevel',
+        'ssendemon',
+        'ifr',
+    ];
 
     /**
      * Run the migrations.
@@ -58,10 +80,10 @@ return new class extends Migration
                 $sections[$sectionName][] = $line;
             }
         }
-        $this->processVocabulary($sections['vocabulary']);
-        $this->processRooms($sections['rooms']);
-        $this->processDemons($sections['demons']);
         $this->processText($sections['text']);
+        $this->processDemons($sections['demons']);
+        $this->processRooms($sections['rooms']);
+        $this->processVocabulary($sections['vocabulary']);
         $this->processTravel($sections['travel']);
         $this->processObjects($sections['objects']);
 
@@ -115,6 +137,9 @@ return new class extends Migration
                     case 'object':
                         $model = ObjectForm::class;
                         break;
+                    case 'action':
+                        $model = Verb::class;
+                        break;
                     default:
                         $model = null;
                 }
@@ -140,8 +165,164 @@ return new class extends Migration
                         'value'     => $value,
                     ]);
                     $objectForm->objectClass()->associate($objectClass)->save();
+                    break;
+                case Verb::class:
+                    $this->processAction($attributes);
             }
         }
+    }
+
+    private function processAction(array $attributes): void
+    {
+        $actionWord = array_shift($attributes);
+        $internalCommand = null;
+        $functionObjectForm = null;
+        $functionRoom = null;
+        $order = null;
+        $functionValue = null;
+        if (str_starts_with($actionWord, self::DEMON_START)) {
+            $model = Demon::where('name', $actionWord)->firstOrFail();
+        } else {
+            $model = Verb::where('name', $actionWord)->first();
+            if (is_null($model)) {
+                $model = Verb::create([
+                    'name' => $actionWord,
+                ]);
+                $order = 0;
+            }
+        }
+        if (is_null($order)) {
+            $previousAction = Action
+                ::where('type_type', $model::class)
+                ->where('type_id', $model->id)
+                ->orderBy('order', 'desc')
+                ->first();
+            if ($previousAction) {
+                $order = $previousAction->order + 1;
+            } else {
+                $order = 0;
+            }
+        }
+
+        $next = array_shift($attributes);
+
+        if (str_starts_with($next, self::COMMAND_START)) {
+            $internalCommand = InternalCommand::where('name', $next)->firstOrFail();
+            $next = array_shift($attributes);
+        }
+
+        if ($next == self::NO_CLASS) {
+            $toObjectClass = null;
+        } else {
+            $toObjectClass = ObjectClass::updateOrCreate([
+                'name'  => $next,
+            ]);
+        }
+
+        $next = array_shift($attributes);
+
+        if ($next == self::NO_CLASS) {
+            $withObjectClass = null;
+        } else {
+            $withObjectClass = ObjectClass::updateOrCreate([
+                'name'  => $next,
+            ]);
+        }
+
+        $next = array_shift($attributes);
+        $internalFunction = InternalFunction::where('name', $next)->first();
+        if ($internalFunction) {
+            $parameters = array();
+            do {
+                $next = array_shift($attributes);
+                if (!is_numeric($next)) {
+                    $parameters[] = $next;
+                }
+            } while (!is_numeric($next));
+            if ($parameters[0] != self::NO_PARAMETER) {
+                if ($parameters[0] == self::FUNCTION_ON_WITH_OBJECT) {
+                    $functionObjectForm = $withObjectClass; // todo Check it shouldn't be $toObject
+                } else {
+                    $functionObjectForm = ObjectForm::where('name', $parameters[0])->firstOrFail();
+                }
+            }
+            if (isset($parameters[1])) {
+                $functionRoom = Room::where('name', $parameters[1])->firstOrFail();
+            }
+            if (in_array($internalFunction->name, self::FUNCTIONS_WITH_VALUES)) {
+                $functionValue = $next;
+                $next = array_shift($attributes);
+            }
+        }
+
+        $playerText = null;
+        if ($next > 0) {
+            $playerText = Text::findOrFail($next);
+        }
+
+        $localText = null;
+        $local = array_shift($attributes);
+        if ($local > 0) {
+            $localText = Text::findOrfail($local);
+        }
+
+        $next = array_shift($attributes);
+        $globalText = null;
+        $demon = null;
+        if (is_numeric($next)) {
+            if ($next > 0) {
+                $globalText = Text::findOrFail($next);
+            } else {
+                $demon = Demon::where('number', $next * -1)->firstOrFail();
+            }
+        }
+
+        $action = Action::make([
+            'order'             => $order,
+            'function_value'    => $functionValue,
+        ]);
+
+        $action->type()->associate($model);
+
+        if ($internalCommand) {
+            $action->internalCommand()->associate($internalCommand);
+        }
+
+        if ($internalFunction) {
+            $action->internalFunction()->associate($internalFunction);
+        }
+
+        if ($toObjectClass) {
+            $action->toObjectClass()->associate($toObjectClass);
+        }
+
+        if ($withObjectClass) {
+            $action->withObjectClass()->associate($withObjectClass);
+        }
+
+        if ($functionObjectForm) {
+            $action->functionObjectForm()->associate($functionObjectForm);
+        }
+
+        if ($functionRoom) {
+            $action->functionRoom()->associate($functionRoom);
+        }
+
+        $action->playerText()->associate($playerText);
+        if ($localText) {
+            $action->localText()->associate($localText);
+        }
+        if ($globalText) {
+            $action->globalText()->associate($globalText);
+        }
+        if ($demon) {
+            $action->demon()->associate($demon);
+        }
+
+        $action->save();
+
+        // todo Add functions
+
     }
 
     private function processRooms(array $roomsSection) {
@@ -782,21 +963,23 @@ return new class extends Migration
         $random = false;
         $randomArray = array();
         foreach ($array as $key => $element) {
-            if ($random) {
-                if (str_ends_with($element, '>') or str_ends_with($element, ']')) {
-                    $random = false;
-                    $randomArray[] = substr($element, 0, -1);
-                    $content[] = $randomArray[array_rand($randomArray)];
+            if (!str_starts_with($element, self::COMMENT)) {
+                if ($random) {
+                    if (str_ends_with($element, '>') or str_ends_with($element, ']')) {
+                        $random = false;
+                        $randomArray[] = substr($element, 0, -1);
+                        $content[] = $randomArray[array_rand($randomArray)];
+                    } else {
+                        $randomArray[] = $element;
+                    }
                 } else {
-                    $randomArray[] = $element;
-                }
-            } else {
-                if (str_starts_with($element, '<') or str_starts_with($element, '[')) {
-                    $random = true;
-                    $randomArray[] = substr($element, 1);
-                } else {
-                    if ($key == 0 or $element !== '') {
-                        $content[] = $element;
+                    if (str_starts_with($element, '<') or str_starts_with($element, '[')) {
+                        $random = true;
+                        $randomArray[] = substr($element, 1);
+                    } else {
+                        if ($key == 0 or $element !== '') {
+                            $content[] = $element;
+                        }
                     }
                 }
             }

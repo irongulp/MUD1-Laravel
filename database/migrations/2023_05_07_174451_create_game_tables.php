@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\InternalCommand;
+use App\Models\InternalFunction;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -128,18 +130,27 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('commands', function (Blueprint $table) {
+        Schema::create('internal_commands', function (Blueprint $table) {
             $table->id();
             $table->string('name');
             $table->timestamps();
         });
 
-        Schema::create('actions', function (Blueprint $table) {
+        Schema::create('internal_functions', function (Blueprint $table) {
             $table->id();
-            $table->boolean('is_demon_action');
-            $table->foreignId('command_id')
-                ->nullable()
-                ->constrained();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('verbs', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('texts', function (Blueprint $table) {
+            $table->id();
+            $table->text('content');
             $table->timestamps();
         });
 
@@ -162,6 +173,67 @@ return new class extends Migration
             $table->foreignId('demon_id')
                 ->constrained();
             $table->foreignId('attribute_id')
+                ->constrained();
+            $table->timestamps();
+        });
+
+        Schema::create('actions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedTinyInteger('order')
+                ->default(0);
+            $table->morphs('type'); // verb or demon
+            $table->foreignId('internal_command_id')
+                ->nullable()
+                ->constrained();
+            $table->foreignId('internal_function_id')
+                ->nullable()
+                ->constrained();
+            $table->unsignedBigInteger('to_object_class_id')
+                ->nullable();
+            $table->foreign('to_object_class_id')
+                ->references('id')
+                ->on('object_classes')
+                ->constrained();
+            $table->unsignedBigInteger('with_object_class_id')
+                ->nullable();
+            $table->foreign('with_object_class_id')
+                ->references('id')
+                ->on('object_classes')
+                ->constrained();
+            $table->unsignedBigInteger('function_object_form_id')
+                ->nullable();
+            $table->foreign('function_object_form_id')
+                ->references('id')
+                ->on('object_forms')
+                ->constrained();
+            $table->unsignedBigInteger('function_room_id')
+                ->nullable();
+            $table->foreign('function_room_id')
+                ->references('id')
+                ->on('rooms')
+                ->constrained();
+            $table->unsignedMediumInteger('function_value')
+                ->nullable();
+            $table->unsignedBigInteger('player_text_id')
+                ->nullable();
+            $table->foreign('player_text_id')
+                ->references('id')
+                ->on('texts')
+                ->constrained();
+            $table->unsignedBigInteger('local_text_id')
+                ->nullable();
+            $table->foreign('local_text_id')
+                ->references('id')
+                ->on('texts')
+                ->constrained();
+            $table->unsignedBigInteger('global_text_id')
+                ->nullable();
+            $table->foreign('global_text_id')
+                ->references('id')
+                ->on('texts')
+                ->constrained();
+            $table->foreignId('demon_id')
+                ->nullable()
                 ->constrained();
             $table->timestamps();
         });
@@ -232,7 +304,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-
         // Travel has no plural form in Laravel
         Schema::create('travel', function (Blueprint $table) {
             $table->id();
@@ -262,12 +333,78 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('texts', function (Blueprint $table) {
-            $table->id();
-            $table->text('content');
-            $table->timestamps();
-        });
+        $this->insertInternalFunctions();
+        $this->insertInternalCommands();
+    }
 
+    private function insertInternalFunctions(): void
+    {
+        $internalFunctionNames = [
+            'backrot', 'create', 'dead', 'dec', 'decdestroy',
+            'decifzero', 'decinc', 'delaymove', 'destroy', 'destroycreate',
+            'destroydec', 'destroydestroy', 'destroyinc', 'destroyset', 'destroytogglesex',
+            'destroytrans', 'disenable', 'emotion', 'enable', 'exp',
+            'expdestroy', 'expinc', 'expmove', 'expset', 'fix',
+            'flipat', 'float', 'floatdestroy', 'flush', 'forrot',
+            'holdfirst', 'holdlast', 'hurt', 'ifasleep', 'ifberserk',
+            'ifblind', 'ifdead', 'ifdeaf', 'ifdestroyed', 'ifdisenable',
+            'ifdumb', 'ifenabled', 'iffighting', 'ifgot', 'ifhave',
+            'ifhere', 'ifheretrans', 'ifill', 'ifin', 'ifinc',
+            'ifinsis', 'ifinvis', 'iflevel', 'iflight', 'ifobjcontains',
+            'ifobjcount', 'ifobjis', 'ifobjplayer', 'ifparalysed', 'ifplaying',
+            'ifprop', 'ifpropdec', 'ifpropdestroy', 'ifpropinc', 'ifr',
+            'ifrlevel', 'ifrprop', 'ifrstas', 'ifself', 'ifsex',
+            'ifsmall', 'ifsnooping', 'ifweighs', 'ifwiz', 'ifzero',
+            'inc', 'incdec', 'incdestroy', 'incmove', 'incsend',
+            'injure', 'loseexp', 'losestamina', 'move', 'noifr',
+            'null', 'resetdest', 'retal', 'send', 'sendeffect',
+            'sendemon', 'sendlevel', 'sendmess', 'set', 'setdestroy',
+            'setfloat', 'setsex', 'ssendemon', 'stamina', 'staminadestroy',
+            'suspend', 'swap', 'testsex', 'testsmall', 'toggle',
+            'togglesex', 'trans', 'transhere', 'transwhere', 'unlessberserk',
+            'unlessdead', 'unlessdestroyed', 'unlessdisenable', 'unlessenabled', 'unlessfighting',
+            'unlessgot', 'unlesshave', 'unlesshere', 'unlessill', 'unlessin',
+            'unlessinc', 'unlessinsis', 'unlesslevel', 'unlessobjcontains', 'unlessobjis',
+            'unlessobjplayer', 'unlessplaying', 'unlessprop', 'unlesspropdestroy', 'unlessrlevel',
+            'unlessrstas', 'unlesssmall', 'unlesssnooping', 'unlessweighs', 'unlesswiz',
+            'writein', 'zonk',
+        ];
+
+        foreach ($internalFunctionNames as $internalFunctionName) {
+            InternalFunction::create([
+                'name'  => $internalFunctionName
+            ]);
+        }
+    }
+
+    private function insertInternalCommands(): void
+    {
+        $internalCommandNames = [
+           '.assist', '.attach', '.autowho', '.back', '.begone',
+           '.berserk', '.blind', '.brief', '.bug', '.bye',
+           '.change', '.converse', '.crash', '.ctrap', '.cure',
+           '.deafen', '.debug', '.demo', '.detach', '.diagnose',
+           '.direct', '.drop', '.dumb', '.eat', '.empty',
+           '.enchant', '.exits', '.exorcise', '.flee', '.flush',
+           '.fod', '.follow', '.freeze', '.get', '.go',
+           '.haste', '.hours', '.humble', '.ignore', '.insert',
+           '.inven', '.invis', '.keep', '.kill', '.laugh',
+           '.log', '.look', '.lose', '.make', '.map',
+           '.mobile', '.newhours', '.p', '.paralyse', '.password',
+           '.peace', '.police', '.pronouns', '.proof', '.provoke',
+           '.purge', '.quickwho', '.quit', '.refuse', '.remove',
+           '.reset', '.resurrect', '.rooms', '.save', '.say',
+           '.score', '.set', '.sget', '.sgo', '.shelve',
+           '.sleep', '.snoop', '.spectacular', '.stamina', '.summon',
+           '.tell', '.time', '.unfreeze', '.unkeep', '.unshelve',
+           '.unsnoop', '.unveil', '.value', '.verbose', '.vis',
+           '.wake', '.war', '.weigh', '.where', '.who',
+        ];
+        foreach ($internalCommandNames as $internalCommandName) {
+            InternalCommand::create([
+                'name'  => $internalCommandName
+            ]);
+        }
     }
 
     /**
