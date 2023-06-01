@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DebugRoomController;
+use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -14,9 +15,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
-Route::get('/debug/room', [DebugRoomController::class, 'index']);
+Route::get('/', [HomeController::class, 'index']);
+Route::get('/debug/room', [DebugRoomController::class, 'index'])->name('home');
 Route::get('/debug/room/{room}', [DebugRoomController::class, 'get'])->name('debug-room');
+

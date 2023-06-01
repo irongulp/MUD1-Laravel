@@ -53,12 +53,12 @@ class Action extends Model
 
     public function playerText(): BelongsTo
     {
-        return $this->belongsTo(Travel::class, 'player_text_id');
+        return $this->belongsTo(Text::class, 'player_text_id');
     }
 
     public function localText(): BelongsTo
     {
-        return $this->belongsTo(Travel::class, 'local_text_id');
+        return $this->belongsTo(Text::class, 'local_text_id');
     }
 
     public function globalText(): BelongsTo

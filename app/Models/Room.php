@@ -49,8 +49,13 @@ class Room extends Model
         return $this->belongsTo(Room::class, 'short_description_room_id');
     }
 
-    public function objectInstances(): BelongsToMany
+    public function objectInstances(): HasMany
     {
-        return $this->belongsToMany(ObjectInstance::class);
+        return $this->hasMany(ObjectInstance::class);
+    }
+
+    public function functionActions(): HasMany
+    {
+        return $this->hasMany(Action::class, 'function_room_id');
     }
 }

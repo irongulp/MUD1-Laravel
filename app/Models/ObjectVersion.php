@@ -20,9 +20,9 @@ class ObjectVersion extends Model
         return $this->belongsTo(ObjectForm::class);
     }
 
-    public function objectInstances(): HasMany
+    public function objectImprints(): HasMany
     {
-        return $this->hasMany(ObjectInstance::class);
+        return $this->hasMany(ObjectImprint::class);
     }
 
     public function objectStates(): HasMany

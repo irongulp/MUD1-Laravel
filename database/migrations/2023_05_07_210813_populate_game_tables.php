@@ -3,9 +3,10 @@
 use App\Models\Action;
 use App\Models\InternalCommand;
 use App\Models\InternalFunction;
+use App\Models\ObjectInstance;
 use App\Models\Verb;
 use App\Models\Demon;
-use App\Models\ObjectInstance;
+use App\Models\ObjectImprint;
 use App\Models\Motion;
 use App\Models\Noise;
 use App\Models\ObjectClass;
@@ -20,7 +21,6 @@ use App\Models\Travel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Migrations\Migration;
-use const http\Client\Curl\VERSIONS;
 
 return new class extends Migration
 {
@@ -54,6 +54,33 @@ return new class extends Migration
         'unlessrlevel',
         'ssendemon',
         'ifr',
+        'exp',
+        'loseexp',
+        'unlessprop',
+        'unlessweighs',
+        'ifobjcount',
+        'ifpropdec',
+        'ifrprop',
+        'set',
+        'ifdumb',
+        'ifasleep',
+        'ifinvis',
+        'ifsex',
+        'enable',
+        'ifpropdestroy',
+        'expset',
+        'losestamina',
+        'destroyset',
+        'setdestroy',
+        'ifpropinc',
+        'ifdisenable',
+        'unlesslevel',
+        'setfloat',
+        'ifrlevel',
+        'ifdeaf',
+        'ifblind',
+        'ifparalysed',
+        'staminadestroy',
     ];
 
     /**
@@ -320,9 +347,6 @@ return new class extends Migration
         }
 
         $action->save();
-
-        // todo Add functions
-
     }
 
     private function processRooms(array $roomsSection) {
@@ -673,16 +697,16 @@ return new class extends Migration
 
     private function processObjects(array $objects): void
     {
-        $objectInstance = null;
+        $objectImprint = null;
         $description = null;
         foreach ($objects as $line) {
             $attributes = $this->getTabArray($line);
             $id = array_shift($attributes);
             if ($id and !is_numeric($id)) {
-                if ($objectInstance) {
+                if ($objectImprint) {
                     $this->processCurrentObject(
                         $description,
-                        $objectInstance,
+                        $objectImprint,
                         $latestVersion,
                         $objectName,
                         $roomList,
@@ -692,8 +716,8 @@ return new class extends Migration
                     $description = null;
                 }
                 $objectName = $id;
-                $newObject = $this->getNewObjectInstance($attributes);
-                $objectInstance = $newObject['objectInstance'];
+                $newObject = $this->getNewobjectImprint($attributes);
+                $objectImprint = $newObject['objectImprint'];
                 $startState = $newObject['startState'];
                 $roomList = $newObject['roomList'];
                 $latestVersion = ObjectVersion
@@ -706,20 +730,20 @@ return new class extends Migration
                 $next = array_shift($attributes);
                 if (is_numeric($id)) {
                     if (str_starts_with($next, self::REPEAT)) {
-                        if (!$objectInstance->exists) {
+                        if (!$objectImprint->exists) {
                             // use latest version of object
-                            $objectInstance->objectVersion()->associate($latestVersion)->save();
-                            $this->processObjectInstanceRooms($objectInstance, $roomList);
+                            $objectImprint->objectVersion()->associate($latestVersion)->save();
+                            $this->createObjectInstances($objectImprint, $roomList);
                         }
                     } else {
-                        if (!$objectInstance->exists) {
+                        if (!$objectImprint->exists) {
                             // create new version of object
                             $objectVersion = $this->getNewVersionOfObject($objectName, $latestVersion);
-                            $objectInstance->objectVersion()->associate($objectVersion)->save();
-                            $this->processObjectInstanceRooms($objectInstance, $roomList);
+                            $objectImprint->objectVersion()->associate($objectVersion)->save();
+                            $this->createObjectInstances($objectImprint, $roomList);
                         }
                         if ($description) {
-                            $this->createState($objectInstance->objectVersion, $currentState, $description);
+                            $this->createState($objectImprint->objectVersion, $currentState, $description);
                             $description = null;
                         }
                         $currentState = $id;
@@ -734,7 +758,7 @@ return new class extends Migration
         }
         $this->processCurrentObject(
             $description,
-            $objectInstance,
+            $objectImprint,
             $latestVersion,
             $objectName,
             $roomList,
@@ -743,7 +767,7 @@ return new class extends Migration
         );
     }
 
-    private function getNewObjectInstance(
+    private function getNewobjectImprint(
         array $attributes
     ): array {
         $preRoomAttributes = array();
@@ -834,7 +858,7 @@ return new class extends Migration
             } while ($attribute);
         }
 
-        $objectInstance = ObjectInstance::make([
+        $objectImprint = ObjectImprint::make([
             'speed' => $speed,
             'attack_probability' => $attackProbability,
             'score' => $score,
@@ -853,13 +877,13 @@ return new class extends Migration
 
         if ($demonNumber) {
             $demon = Demon::where('number', $demonNumber)->firstOrFail();
-            $objectInstance->demon()->associate($demon);
+            $objectImprint->demon()->associate($demon);
         }
 
-        // Don't save $objectInstance yet, as we don't know the version
+        // Don't save $objectImprint yet, as we don't know the version
 
         return compact(
-            'objectInstance',
+            'objectImprint',
             'startState',
             'roomList'
         );
@@ -867,27 +891,27 @@ return new class extends Migration
 
     private function processCurrentObject(
         ?string $description,
-        ObjectInstance $objectInstance,
+        ObjectImprint $objectImprint,
         ?ObjectVersion $latestVersion,
         string $objectName,
         array $roomList,
         int $currentState,
         ?int $startState
     ): void {
-        if (!$objectInstance->exists) {
+        if (!$objectImprint->exists) {
             if (is_null($latestVersion)) {
                 $latestVersion = $this->getNewVersionOfObject($objectName, $latestVersion);
             }
-            $objectInstance->objectVersion()->associate($latestVersion)->save();
-            $this->processObjectInstanceRooms($objectInstance, $roomList);
+            $objectImprint->objectVersion()->associate($latestVersion)->save();
+            $this->createObjectInstances($objectImprint, $roomList);
         }
 
         if ($description) {
-            $this->createState($objectInstance->objectVersion, $currentState, $description);
+            $this->createState($objectImprint->objectVersion, $currentState, $description);
         }
 
         if ($startState) {
-            $this->setStateOfObjectInstance($objectInstance, $startState);
+            $this->setStateOfobjectInstances($objectImprint, $startState);
         }
     }
 
@@ -904,35 +928,40 @@ return new class extends Migration
         return $objectVersion;
     }
 
-    private function processObjectInstanceRooms(
-        ObjectInstance $objectInstance,
+    private function createObjectInstances(
+        ObjectImprint $objectImprint,
         array $roomList
     ): void
     {
         foreach ($roomList as $roomName) {
             $room = Room::where('name', $roomName)->first();
             if ($room) {
-                $objectInstance->rooms()->attach($room);
+                $objectInstance = ObjectInstance::make();
+                $objectInstance->objectImprint()->associate($objectImprint);
+                $objectInstance->room()->associate($room);
+                $objectInstance->save();
             } else {
                 // todo Place object in container
             }
         }
     }
 
-    private function setStateOfObjectInstance(
-        ObjectInstance $objectInstance,
+    private function setStateOfobjectInstances(
+        ObjectImprint $objectImprint,
         int $startState
     ): void
     {
         $objectState = ObjectState
-            ::whereHas('objectVersion', function (Builder $q) use ($objectInstance) {
-                $q->where('id', $objectInstance->objectVersion->id);
+            ::whereHas('objectVersion', function (Builder $q) use ($objectImprint) {
+                $q->where('id', $objectImprint->objectVersion->id);
             })
             ->where('number', $startState)
             ->first(); // Some objects have a start state, but no states, e.g. rstop
 
         if ($objectState) {
-            $objectInstance->objectState()->associate($objectState)->save();
+            foreach ($objectImprint->objectInstances as $objectInstance) {
+                $objectInstance->objectState()->associate($objectState)->save();
+            }
         }
     }
 

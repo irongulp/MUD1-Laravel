@@ -7,9 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class InternalFunction extends Model
 {
+    private const TRANSPORT = 'trans';
+
     use HasFactory;
 
     protected $fillable = [
         'name',
     ];
+
+    public function getIsTransportAttribute(): bool
+    {
+        return $this->name == self::TRANSPORT;
+    }
 }

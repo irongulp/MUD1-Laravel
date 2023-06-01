@@ -23,6 +23,6 @@ class ObjectState extends Model
 
     public function objectInstances(): HasMany
     {
-        return $this->hasMany(ObjectInstance::class);
+        return $this->hasMany(ObjectImprint::class);
     }
 }

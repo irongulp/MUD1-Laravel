@@ -139,6 +139,8 @@ return new class extends Migration
         Schema::create('internal_functions', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->unsignedTinyInteger('number_of_parameters')
+                ->default(0);
             $table->timestamps();
         });
 
@@ -255,7 +257,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('object_instances', function (Blueprint $table) {
+        Schema::create('object_imprints', function (Blueprint $table) {
             $table->id();
             $table->foreignId('object_version_id')
                 ->constrained();
@@ -266,9 +268,6 @@ return new class extends Migration
                 ->constrained();
             $table->unsignedTinyInteger('attack_probability')
                 ->nullable();
-            $table->foreignId('object_state_id')
-                ->nullable()
-                ->constrained();
             $table->unsignedSmallInteger('score')
                 ->nullable();
             $table->unsignedSmallInteger('stamina')
@@ -296,10 +295,15 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('object_instance_room', function (Blueprint $table) {
-            $table->foreignId('object_instance_id')
+        Schema::create('object_instances', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('object_imprint_id')
                 ->constrained();
             $table->foreignId('room_id')
+                ->nullable()
+                ->constrained();
+            $table->foreignId('object_state_id')
+                ->nullable()
                 ->constrained();
             $table->timestamps();
         });

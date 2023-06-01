@@ -4,8 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Demon extends Model
 {
@@ -24,8 +26,8 @@ class Demon extends Model
         return $this->belongsToMany(Attribute::class);
     }
 
-    public function actions(): MorphMany
+    public function action(): MorphOne
     {
-        return $this->morphMany(Action::class, 'type');
+        return $this->morphOne(Action::class, 'type');
     }
 }
